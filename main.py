@@ -1,7 +1,6 @@
 import json
 import time
 from typing import List, TypedDict
-
 import requests
 from bs4 import BeautifulSoup, Tag
 
@@ -75,8 +74,7 @@ class MashinaAPI:
                     [[{"text": "Посмотреть на сайте!", "url": url}]]
             })
         }
-        r = self.session.post(self.TELEGRAM_PATH, data=data)
-        print(r.content)
+        self.session.post(self.TELEGRAM_PATH, data=data)
 
     def main_loop(self):
         while True:
