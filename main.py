@@ -1,3 +1,4 @@
+import json
 import time
 from typing import List, TypedDict
 
@@ -6,8 +7,9 @@ from bs4 import BeautifulSoup, Tag
 
 
 class Car:
-    def __init__(self, uuid=None, name=None, price=None, year=None, engine=None, transmission=None, body_type=None, additional_info=None,
-                 time_added=None, url_image=None):
+    def __init__(self, uuid=None, name=None, price=None, year=None, engine=None, transmission=None, body_type=None,
+                 additional_info=None,
+                 time_added=None, url_image=None, url=None):
         self.__uuid = uuid
         self.__name = name
         self.__price = price
@@ -18,6 +20,7 @@ class Car:
         self.__additional_info = additional_info
         self.__time_added = time_added
         self.__url_image = url_image
+        self.__url = url
 
     def __str__(self):
         return "Car<id=%s name=%s price=%s>" % (self.__uuid, self.__name, self.__price)
@@ -27,6 +30,9 @@ class Car:
 
     def get_image_url(self):
         return self.__url_image
+
+    def get_url_web_page(self):
+        return "https://www.mashina.kg%s" % self.__url
 
     def get_message(self):
         message = f"""
@@ -43,12 +49,14 @@ class Car:
 
 class MashinaAPI:
     EVERY = 1
-    CHAT_ID = "-4094474720"
-    TELEGRAM_PATH = "https://api.telegram.org/bot6787736415:AAHo6wi9mEx4AhM3_VOtiah_5bGsI1F7Tdg/sendPhoto"
+    CHAT_ID = "-1002052391457"
+    BOT_TOKEN = "bot6787736415:AAHo6wi9mEx4AhM3_VOtiah_5bGsI1F7Tdg"
+    TELEGRAM_PATH = "https://api.telegram.org/%s/sendPhoto" % BOT_TOKEN
+    BASE_API = ("https://www.mashina.kg/search/all/all/?currency=1&price_from=10000&price_to=260000&sort_by=upped_at"
+                "+desc&time_created=1&page=1")
 
-    def __init__(self, url, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.__show_box: List[Car] = []
-        self.url = url
         self.session = requests.Session()
 
     def send_emal(self, message):
@@ -57,18 +65,24 @@ class MashinaAPI:
     def send_telegram(self, instanc: Car):
         message = instanc.get_message()
         photo = instanc.get_image_url()
+        url = instanc.get_url_web_page()
         data = {
             'chat_id': self.CHAT_ID,
             'photo': photo,
-            'caption': message
+            'caption': message,
+            'reply_markup': json.dumps({
+                "inline_keyboard":
+                    [[{"text": "Посмотреть на сайте!", "url": url}]]
+            })
         }
-        self.session.post(self.TELEGRAM_PATH, data=data)
+        r = self.session.post(self.TELEGRAM_PATH, data=data)
+        print(r.content)
 
     def main_loop(self):
         while True:
 
             time.sleep(self.EVERY)
-            response = self.session.get(self.url)
+            response = self.session.get(self.BASE_API)
             html_wrapper: List[Tag] = self.__get_list_items(response.text)
 
             for item in html_wrapper:
@@ -102,29 +116,17 @@ class MashinaAPI:
             additional_info = item.find('p', class_='volume').text.strip()
             time_added = item.find('div', class_='block city').find('span', class_='date').text.strip()
             image_url = item.find('div', class_='thumb-item-carousel').find("img", class_="lazy-image-attr").get("src")
-
-            uuid = self.__generate_uuid(
-                name,
-                price,
-                year,
-                engine
-            )
+            url = item.find("a").get("href")
+            uuid = url.split("/")[2]
 
             if "сек" not in time_added:
                 self.__try_delete_expired_cars(uuid)
                 return None
 
-            return Car(uuid, name, price, year, engine, transmission, body_type, additional_info, time_added, image_url)
+            return Car(uuid, name, price, year, engine, transmission, body_type, additional_info, time_added, image_url,
+                       url)
         except Exception as e:
             return None
-
-    @staticmethod
-    def __generate_uuid(*args):
-        primary_key: str = ""
-        for iteration in args:
-            primary_key += str(iteration)
-
-        return primary_key.replace(" ", "")
 
     @staticmethod
     def __get_list_items(text):
@@ -144,6 +146,5 @@ class MashinaAPI:
 
 
 if __name__ == "__main__":
-    BASE_API = "https://www.mashina.kg/search/all/all/?currency=1&price_from=10000&price_to=260000&sort_by=upped_at+desc&time_created=1&page=1"
-    instance = MashinaAPI(BASE_API)
+    instance = MashinaAPI()
     instance.main_loop()
